@@ -6,7 +6,7 @@ const bodyParser = require("body-parser");
 const cors = require("cors");
 
 app.use(cors({
-  origin: 'https://guriraline.netlify.app',
+  origin: 'https://guriraline.netlify.app, http://localhost:3000',
   credentials: true
 }));
 
