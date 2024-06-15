@@ -27,23 +27,18 @@ const productSchema = new mongoose.Schema({
     type: Number,
     required: [true, "Please enter your product stock!"],
   },
-  images: {
-    type: [
-      {
-        public_id: {
-          type: String,
-          required: true,
-        },
-        url: {
-          type: String,
-          required: true,
-        },
+  images: [
+    {
+      public_id: {
+        type: String,
+        required: true,
       },
-    ],
-    validate: [
-      { validator: arrayLimit, msg: "{PATH} must contain at least 1 and at most 5 images" }
-    ]
-  },
+      url: {
+        type: String,
+        required: true,
+      },
+    },
+  ],
   reviews: [
     {
       user: {
@@ -58,7 +53,7 @@ const productSchema = new mongoose.Schema({
       productId: {
         type: String,
       },
-      createdAt: {
+      createdAt:{
         type: Date,
         default: Date.now(),
       }
@@ -79,19 +74,10 @@ const productSchema = new mongoose.Schema({
     type: Number,
     default: 0,
   },
-  beneficiaries: {
-    type: String,
-    enum: ["men", "women", "kids", "not specified"],
-    required: true,
-  },
   createdAt: {
     type: Date,
     default: Date.now(),
   },
 });
-
-function arrayLimit(val) {
-  return val.length >= 1 && val.length <= 5;
-}
 
 module.exports = mongoose.model("Product", productSchema);
