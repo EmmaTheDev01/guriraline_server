@@ -40,7 +40,9 @@ const productSchema = new mongoose.Schema({
         },
       },
     ],
-    validate: [arrayLimit, "{PATH} must contain exactly 5 images"]
+    validate: [
+      { validator: arrayLimit, msg: "{PATH} must contain at least 1 and at most 5 images" }
+    ]
   },
   reviews: [
     {
@@ -89,7 +91,7 @@ const productSchema = new mongoose.Schema({
 });
 
 function arrayLimit(val) {
-  return val.length === 5;
+  return val.length >= 1 && val.length <= 5;
 }
 
 module.exports = mongoose.model("Product", productSchema);
