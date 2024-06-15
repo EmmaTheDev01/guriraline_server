@@ -54,7 +54,7 @@ router.post("/create-user", async (req, res, next) => {
     const activationToken = createActivationToken(user);
 
     const activationUrl1 = `https://guriraline.netlify.app/activation/${activationToken}`;
-    const activationUrl2 = `https://anotherurl.com/activation/${activationToken}`; // Your second activation URL
+    const activationUrl2 = `http://localhost:3000/activation/${activationToken}`; // Your second activation URL
 
     try {
       await sendMail({
