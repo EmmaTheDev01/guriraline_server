@@ -123,7 +123,7 @@ router.post(
       const { email, password } = req.body;
 
       if (!email || !password) {
-        return next(new ErrorHandler("Please provide the all fields!", 400));
+        return next(new ErrorHandler("Please fill all fields!", 400));
       }
 
       const user = await User.findOne({ email }).select("+password");
