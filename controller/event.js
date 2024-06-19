@@ -101,7 +101,7 @@ router.delete(
         );
       }
 
-      await Event.findByIdAndDelete(req.params.id); // Use findByIdAndDelete to remove the event
+      await event.findByIdAndDelete(req.params.id); // Use findByIdAndDelete to remove the event
 
       res.status(200).json({
         success: true,
