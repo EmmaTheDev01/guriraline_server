@@ -5,10 +5,19 @@ const cookieParser = require("cookie-parser");
 const bodyParser = require("body-parser");
 const cors = require("cors");
 
-app.use(cors({
-  origin: 'https://guriraline.netlify.app',
+// Array of allowed origins
+const allowedOrigins = [
+  'https://guriraline.netlify.app',
+  'http://localhost:3000',
+  'https://guriraline.com'
+];
+
+const corsOptions = {
+  origin: allowedOrigins,
   credentials: true
-}));
+};
+
+app.use(cors(corsOptions));
 
 app.use(express.json());
 app.use(cookieParser());
