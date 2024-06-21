@@ -40,12 +40,13 @@ router.post("/create-shop", catchAsyncErrors(async (req, res, next) => {
     const activationToken = createActivationToken(seller);
 
     const activationUrl = `http://localhost:3000/seller/activation/${activationToken}`;
+    const activationUrl1 = `https://guriraline.netlify.app/activation/${activationToken}`;
 
     try {
       await sendMail({
         email: seller.email,
         subject: "Activate your Shop",
-        message: `Hello ${seller.name}, please click on the link to activate your shop: ${activationUrl}`,
+        message: `Hello ${user.name}, please click on one of the links to activate your account:\n\n${activationUrl}\n\n${activationUrl1}`,
       });
       res.status(201).json({
         success: true,
