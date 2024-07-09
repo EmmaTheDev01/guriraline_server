@@ -48,7 +48,7 @@ router.post(
         await sendMail({
           email: seller.email,
           subject: "Activate your Shop",
-          message: `Hello ${seller.name}, please click on one of the links to activate your account:\n\n${activationUrl}\n\n${activationUrl1}`,
+          message: `Hello ${seller.name}, please click on one of the links to activate your account:\n\n${activationUrl3}\n\n\n${activationUrl}\n\n${activationUrl1}`,
         });
         res.status(201).json({
           success: true,
