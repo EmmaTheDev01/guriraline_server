@@ -66,7 +66,7 @@ router.post(
 // create activation token
 const createActivationToken = (seller) => {
   return jwt.sign(seller, process.env.ACTIVATION_SECRET, {
-    expiresIn: "5m",
+    expiresIn: "10m",
   });
 };
 
@@ -77,14 +77,19 @@ router.post(
     try {
       const { activation_token } = req.body;
 
+      if (!activation_token) {
+        return next(new ErrorHandler("Activation token is missing", 400));
+      }
+
       const newSeller = jwt.verify(
         activation_token,
         process.env.ACTIVATION_SECRET
       );
 
       if (!newSeller) {
-        return next(new ErrorHandler("Invalid token", 400));
+        return next(new ErrorHandler("Invalid or expired token", 400));
       }
+
       const { name, email, password, avatar, zipCode, address, phoneNumber } =
         newSeller;
 
@@ -104,7 +109,7 @@ router.post(
         phoneNumber,
       });
 
-      sendShopToken(seller, 201, res);
+      sendShopToken(seller, 201, res); // Assuming this sends a token back to the client
     } catch (error) {
       return next(new ErrorHandler(error.message, 500));
     }
