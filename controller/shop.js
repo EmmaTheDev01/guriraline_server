@@ -40,9 +40,9 @@ router.post(
 
       const activationToken = createActivationToken(seller);
 
+      const activationUrl3 = `https://guriraline.com/activation/${activationToken}`;
       const activationUrl = `http://localhost:3000/seller/activation/${activationToken}`;
       const activationUrl1 = `https://guriraline.netlify.app/activation/${activationToken}`;
-      const activationUrl3 = `https://guriraline.com/activation/${activationToken}`;
 
       try {
         await sendMail({
