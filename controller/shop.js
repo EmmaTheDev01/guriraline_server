@@ -40,19 +40,19 @@ router.post(
 
       const activationToken = createActivationToken(seller);
 
-      const activationUrl3 = `https://guriraline.com/activation/${activationToken}`;
       const activationUrl = `http://localhost:3000/seller/activation/${activationToken}`;
       const activationUrl1 = `https://guriraline.netlify.app/activation/${activationToken}`;
+      const activationUrl3 = `https://guriraline.com/activation/${activationToken}`;
 
       try {
         await sendMail({
           email: seller.email,
           subject: "Activate your Shop",
-          message: `Hello ${seller.name}, please click on one of the links to activate your account:\n\n${activationUrl3}\n\n\n${activationUrl}\n\n${activationUrl1}`,
+          message: `Hello ${user.name}, please click on one of the links to activate your account:\n\n${activationUrl3}\n\n\n${activationUrl}\n\n${activationUrl1}`,
         });
         res.status(201).json({
           success: true,
-          message: `Please check your email: ${seller.email} to activate your shop!`,
+          message: `please check your email:- ${seller.email} to activate your shop!`,
         });
       } catch (error) {
         return next(new ErrorHandler(error.message, 500));
@@ -119,13 +119,13 @@ router.post(
       const { email, password } = req.body;
 
       if (!email || !password) {
-        return next(new ErrorHandler("Please provide all fields!", 400));
+        return next(new ErrorHandler("Please provide the all fields!", 400));
       }
 
       const user = await Shop.findOne({ email }).select("+password");
 
       if (!user) {
-        return next(new ErrorHandler("User doesn't exist!", 400));
+        return next(new ErrorHandler("User doesn't exists!", 400));
       }
 
       const isPasswordValid = await user.comparePassword(password);
@@ -152,7 +152,7 @@ router.get(
       const seller = await Shop.findById(req.seller._id);
 
       if (!seller) {
-        return next(new ErrorHandler("User doesn't exist", 400));
+        return next(new ErrorHandler("User doesn't exists", 400));
       }
 
       res.status(200).json({
@@ -244,7 +244,7 @@ router.put(
     try {
       const { name, description, address, phoneNumber, zipCode } = req.body;
 
-      const shop = await Shop.findById(req.seller._id);
+      const shop = await Shop.findOne(req.seller._id);
 
       if (!shop) {
         return next(new ErrorHandler("User not found", 400));
@@ -337,7 +337,7 @@ router.put(
   })
 );
 
-// delete seller withdraw methods --- only seller
+// delete seller withdraw merthods --- only seller
 router.delete(
   "/delete-withdraw-method/",
   isSeller,
