@@ -1,210 +1,156 @@
 const express = require("express");
+const path = require("path");
 const router = express.Router();
 const jwt = require("jsonwebtoken");
-const cloudinary = require("cloudinary").v2;
-const Shop = require("../model/shop");
 const sendMail = require("../utils/sendMail");
+const Shop = require("../model/shop");
 const { isAuthenticated, isSeller, isAdmin } = require("../middleware/auth");
+const cloudinary = require("cloudinary");
 const catchAsyncErrors = require("../middleware/catchAsyncErrors");
 const ErrorHandler = require("../utils/ErrorHandler");
+const sendShopToken = require("../utils/shopToken");
 
-// Cloudinary configuration
-cloudinary.config({
-  cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
-  api_key: process.env.CLOUDINARY_API_KEY,
-  api_secret: process.env.CLOUDINARY_API_SECRET,
-});
+// create shop
+router.post("/create-shop", catchAsyncErrors(async (req, res, next) => {
+  try {
+    const { email } = req.body;
+    const sellerEmail = await Shop.findOne({ email });
+    if (sellerEmail) {
+      return next(new ErrorHandler("User already exists", 400));
+    }
 
-// Create shop account
-router.post(
-  "/create-shop",
-  catchAsyncErrors(async (req, res, next) => {
+    const myCloud = await cloudinary.v2.uploader.upload(req.body.avatar, {
+      folder: "avatars",
+    });
+
+
+    const seller = {
+      name: req.body.name,
+      email: email,
+      password: req.body.password,
+      avatar: {
+        public_id: myCloud.public_id,
+        url: myCloud.secure_url,
+      },
+      address: req.body.address,
+      phoneNumber: req.body.phoneNumber,
+      zipCode: req.body.zipCode,
+    };
+
+    const activationToken = createActivationToken(seller);
+
+    const activationUrl = `http://https://guriraline.com/seller/activation/${activationToken}`;
+
     try {
-      const { name, email, password, avatar, address, phoneNumber, zipCode } = req.body;
-
-      // Validate required fields
-      if (!name || !email || !password || !avatar || !address || !phoneNumber || !zipCode) {
-        return next(new ErrorHandler("Please provide all required fields", 400));
-      }
-
-      // Check if user with the same email already exists
-      const sellerEmail = await Shop.findOne({ email });
-      if (sellerEmail) {
-        return next(new ErrorHandler("User already exists", 400));
-      }
-
-      // Upload avatar to Cloudinary
-      const myCloud = await cloudinary.uploader.upload(avatar, {
-        folder: "avatars",
-      });
-
-      // Create seller object
-      const seller = new Shop({
-        name,
-        email,
-        password,
-        avatar: {
-          public_id: myCloud.public_id,
-          url: myCloud.secure_url,
-        },
-        address,
-        phoneNumber,
-        zipCode,
-      });
-
-      // Save seller to database
-      await seller.save();
-
-      // Generate activation token
-      const activationToken = createActivationToken({
-        id: seller._id,
-        email: seller.email,
-      });
-
-      // URLs for activation email
-      const activationUrl = `http://localhost:3000/seller/activation/${activationToken}`;
-      const activationUrl1 = `https://guriraline.netlify.app/activation/${activationToken}`;
-      const activationUrl3 = `https://guriraline.com/activation/${activationToken}`;
-
-      // Send activation email
       await sendMail({
         email: seller.email,
         subject: "Activate your Shop",
-        message: `Hello ${seller.name}, please click on one of the links to activate your account:\n\n${activationUrl3}\n\n\n${activationUrl}\n\n${activationUrl1}`,
+        message: `Hello ${seller.name}, please click on the link to activate your shop: ${activationUrl}`,
       });
-
-      // Respond to client
       res.status(201).json({
         success: true,
-        message: `Please check your email: ${seller.email} to activate your shop!`,
+        message: `please check your email:- ${seller.email} to activate your shop!`,
       });
     } catch (error) {
       return next(new ErrorHandler(error.message, 500));
     }
-  })
-);
+  } catch (error) {
+    return next(new ErrorHandler(error.message, 400));
+  }
+}));
 
-// Create activation token
-const createActivationToken = (payload) => {
-  return jwt.sign(payload, process.env.ACTIVATION_SECRET, {
-    expiresIn: "1h", // Token expires in 1 hour
+// create activation token
+const createActivationToken = (seller) => {
+  return jwt.sign(seller, process.env.ACTIVATION_SECRET, {
+    expiresIn: "5m",
   });
 };
 
-// Activate shop account
+// activate user
 router.post(
   "/activation",
   catchAsyncErrors(async (req, res, next) => {
     try {
       const { activation_token } = req.body;
 
-      // Check if activation token is provided
-      if (!activation_token) {
-        return next(new ErrorHandler("Activation token is missing", 400));
-      }
-
-      // Verify activation token
-      const decoded = jwt.verify(
+      const newSeller = jwt.verify(
         activation_token,
         process.env.ACTIVATION_SECRET
       );
 
-      // Extract email from decoded token
-      const { email } = decoded;
-
-      // Find seller by email
-      let seller = await Shop.findOne({ email });
-
-      // If seller doesn't exist
-      if (!seller) {
-        return next(new ErrorHandler("User not found", 404));
-      }
-
-      // If seller is already activated
-      if (seller.isActivated) {
-        return next(new ErrorHandler("Account is already activated", 400));
-      }
-
-      // Activate seller account
-      seller.isActivated = true;
-
-      // Save seller in database
-      await seller.save();
-
-      // Respond to client
-      res.status(200).json({
-        success: true,
-        message: "Account activated successfully!",
-      });
-    } catch (error) {
-      if (error.name === "JsonWebTokenError") {
+      if (!newSeller) {
         return next(new ErrorHandler("Invalid token", 400));
       }
+      const { name, email, password, avatar, zipCode, address, phoneNumber } =
+        newSeller;
+
+      let seller = await Shop.findOne({ email });
+
+      if (seller) {
+        return next(new ErrorHandler("User already exists", 400));
+      }
+
+      seller = await Shop.create({
+        name,
+        email,
+        avatar,
+        password,
+        zipCode,
+        address,
+        phoneNumber,
+      });
+
+      sendShopToken(seller, 201, res);
+    } catch (error) {
       return next(new ErrorHandler(error.message, 500));
     }
   })
 );
 
-// Login shop account
+// login shop
 router.post(
   "/login-shop",
   catchAsyncErrors(async (req, res, next) => {
     try {
       const { email, password } = req.body;
 
-      // Validate email and password
       if (!email || !password) {
-        return next(new ErrorHandler("Please provide all fields!", 400));
+        return next(new ErrorHandler("Please provide the all fields!", 400));
       }
 
-      // Find seller by email
-      const seller = await Shop.findOne({ email }).select("+password");
+      const user = await Shop.findOne({ email }).select("+password");
 
-      // If seller doesn't exist
-      if (!seller) {
-        return next(new ErrorHandler("User doesn't exist!", 400));
+      if (!user) {
+        return next(new ErrorHandler("User doesn't exists!", 400));
       }
 
-      // Validate password
-      const isPasswordValid = await seller.comparePassword(password);
+      const isPasswordValid = await user.comparePassword(password);
 
-      // If password is invalid
       if (!isPasswordValid) {
-        return next(new ErrorHandler("Please provide the correct information", 400));
+        return next(
+          new ErrorHandler("Please provide the correct information", 400)
+        );
       }
 
-      // Send token to client
-      sendShopToken(seller, 200, res); // Implement sendShopToken function
+      sendShopToken(user, 201, res);
     } catch (error) {
       return next(new ErrorHandler(error.message, 500));
     }
   })
 );
 
-// Helper function to send token to client
-const sendShopToken = (seller, statusCode, res) => {
-  const token = seller.generateToken();
-  res.status(statusCode).json({
-    success: true,
-    token,
-  });
-};
-
-// Middleware to get authenticated seller
+// load shop
 router.get(
   "/getSeller",
-  isAuthenticated,
+  isSeller,
   catchAsyncErrors(async (req, res, next) => {
     try {
-      // Find seller by ID
       const seller = await Shop.findById(req.seller._id);
 
-      // If seller doesn't exist
       if (!seller) {
-        return next(new ErrorHandler("User doesn't exist", 400));
+        return next(new ErrorHandler("User doesn't exists", 400));
       }
 
-      // Respond to client
       res.status(200).json({
         success: true,
         seller,
@@ -215,16 +161,18 @@ router.get(
   })
 );
 
-// Logout from shop account
+// log out from shop
 router.get(
   "/logout",
   catchAsyncErrors(async (req, res, next) => {
     try {
-      // Clear seller token cookie
-      res.clearCookie("seller_token");
-
-      // Respond to client
-      res.status(200).json({
+      res.cookie("seller_token", null, {
+        expires: new Date(Date.now()),
+        httpOnly: true,
+        sameSite: "none",
+        secure: true,
+      });
+      res.status(201).json({
         success: true,
         message: "Log out successful!",
       });
@@ -234,21 +182,13 @@ router.get(
   })
 );
 
-// Get shop info by ID
+// get shop info
 router.get(
   "/get-shop-info/:id",
   catchAsyncErrors(async (req, res, next) => {
     try {
-      // Find shop by ID
       const shop = await Shop.findById(req.params.id);
-
-      // If shop doesn't exist
-      if (!shop) {
-        return next(new ErrorHandler("Shop not found", 404));
-      }
-
-      // Respond to client
-      res.status(200).json({
+      res.status(201).json({
         success: true,
         shop,
       });
@@ -258,40 +198,133 @@ router.get(
   })
 );
 
-// Update shop profile picture
+// update shop profile picture
 router.put(
   "/update-shop-avatar",
   isSeller,
   catchAsyncErrors(async (req, res, next) => {
     try {
-      // Find seller by ID
-      let seller = await Shop.findById(req.seller._id);
+      let existsSeller = await Shop.findById(req.seller._id);
 
-      // If seller doesn't exist
-      if (!seller) {
-        return next(new ErrorHandler("User not found", 404));
-      }
+      const imageId = existsSeller.avatar.public_id;
 
-      // Delete previous avatar from Cloudinary
-      await cloudinary.uploader.destroy(seller.avatar.public_id);
+      await cloudinary.v2.uploader.destroy(imageId);
 
-      // Upload new avatar to Cloudinary
-      const myCloud = await cloudinary.uploader.upload(req.body.avatar, {
+      const myCloud = await cloudinary.v2.uploader.upload(req.body.avatar, {
         folder: "avatars",
         width: 150,
       });
 
-      // Update seller avatar details
-      seller.avatar = {
+      existsSeller.avatar = {
         public_id: myCloud.public_id,
         url: myCloud.secure_url,
       };
 
-      // Save updated seller in database
-      await seller.save();
 
-      // Respond to client
+      await existsSeller.save();
+
       res.status(200).json({
+        success: true,
+        seller: existsSeller,
+      });
+    } catch (error) {
+      return next(new ErrorHandler(error.message, 500));
+    }
+  })
+);
+
+// update seller info
+router.put(
+  "/update-seller-info",
+  isSeller,
+  catchAsyncErrors(async (req, res, next) => {
+    try {
+      const { name, description, address, phoneNumber, zipCode } = req.body;
+
+      const shop = await Shop.findOne(req.seller._id);
+
+      if (!shop) {
+        return next(new ErrorHandler("User not found", 400));
+      }
+
+      shop.name = name;
+      shop.description = description;
+      shop.address = address;
+      shop.phoneNumber = phoneNumber;
+      shop.zipCode = zipCode;
+
+      await shop.save();
+
+      res.status(201).json({
+        success: true,
+        shop,
+      });
+    } catch (error) {
+      return next(new ErrorHandler(error.message, 500));
+    }
+  })
+);
+
+// all sellers --- for admin
+router.get(
+  "/admin-all-sellers",
+  isAuthenticated,
+  isAdmin("Admin"),
+  catchAsyncErrors(async (req, res, next) => {
+    try {
+      const sellers = await Shop.find().sort({
+        createdAt: -1,
+      });
+      res.status(201).json({
+        success: true,
+        sellers,
+      });
+    } catch (error) {
+      return next(new ErrorHandler(error.message, 500));
+    }
+  })
+);
+
+// delete seller ---admin
+router.delete(
+  "/delete-seller/:id",
+  isAuthenticated,
+  isAdmin("Admin"),
+  catchAsyncErrors(async (req, res, next) => {
+    try {
+      const seller = await Shop.findById(req.params.id);
+
+      if (!seller) {
+        return next(
+          new ErrorHandler("Seller is not available with this id", 400)
+        );
+      }
+
+      await Shop.findByIdAndDelete(req.params.id);
+
+      res.status(201).json({
+        success: true,
+        message: "Seller deleted successfully!",
+      });
+    } catch (error) {
+      return next(new ErrorHandler(error.message, 500));
+    }
+  })
+);
+
+// update seller withdraw methods --- sellers
+router.put(
+  "/update-payment-methods",
+  isSeller,
+  catchAsyncErrors(async (req, res, next) => {
+    try {
+      const { withdrawMethod } = req.body;
+
+      const seller = await Shop.findByIdAndUpdate(req.seller._id, {
+        withdrawMethod,
+      });
+
+      res.status(201).json({
         success: true,
         seller,
       });
@@ -301,34 +334,23 @@ router.put(
   })
 );
 
-// Update seller information
-router.put(
-  "/update-seller-info",
+// delete seller withdraw merthods --- only seller
+router.delete(
+  "/delete-withdraw-method/",
   isSeller,
   catchAsyncErrors(async (req, res, next) => {
     try {
-      const { name, description, address, phoneNumber, zipCode } = req.body;
-
-      // Find seller by ID
       const seller = await Shop.findById(req.seller._id);
 
-      // If seller doesn't exist
       if (!seller) {
-        return next(new ErrorHandler("User not found", 404));
+        return next(new ErrorHandler("Seller not found with this id", 400));
       }
 
-      // Update seller details
-      seller.name = name;
-      seller.description = description;
-      seller.address = address;
-      seller.phoneNumber = phoneNumber;
-      seller.zipCode = zipCode;
+      seller.withdrawMethod = null;
 
-      // Save updated seller in database
       await seller.save();
 
-      // Respond to client
-      res.status(200).json({
+      res.status(201).json({
         success: true,
         seller,
       });
