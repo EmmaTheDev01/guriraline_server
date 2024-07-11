@@ -20,7 +20,23 @@ router.post(
   "/create-shop",
   catchAsyncErrors(async (req, res, next) => {
     try {
-      const { email } = req.body;
+      const { email, activation_token } = req.body;
+
+      // Check if activation token is provided
+      if (!activation_token) {
+        return next(new ErrorHandler("Activation token is missing", 400));
+      }
+
+      // Verify activation token
+      const decoded = jwt.verify(activation_token, process.env.ACTIVATION_SECRET);
+
+      // Extract email from decoded token
+      const { email: decodedEmail } = decoded;
+
+      // Check if provided email matches decoded email
+      if (email !== decodedEmail) {
+        return next(new ErrorHandler("Invalid activation token", 400));
+      }
 
       // Check if user with the same email already exists
       const sellerEmail = await Shop.findOne({ email });
@@ -74,6 +90,9 @@ router.post(
         message: `Please check your email: ${seller.email} to activate your shop!`,
       });
     } catch (error) {
+      if (error.name === "JsonWebTokenError") {
+        return next(new ErrorHandler("Invalid token", 400));
+      }
       return next(new ErrorHandler(error.message, 500));
     }
   })
