@@ -20,22 +20,11 @@ router.post(
   "/create-shop",
   catchAsyncErrors(async (req, res, next) => {
     try {
-      const { email, activation_token } = req.body;
+      const { name, email, password, avatar, address, phoneNumber, zipCode } = req.body;
 
-      // Check if activation token is provided
-      if (!activation_token) {
-        return next(new ErrorHandler("Activation token is missing", 400));
-      }
-
-      // Verify activation token
-      const decoded = jwt.verify(activation_token, process.env.ACTIVATION_SECRET);
-
-      // Extract email from decoded token
-      const { email: decodedEmail } = decoded;
-
-      // Check if provided email matches decoded email
-      if (email !== decodedEmail) {
-        return next(new ErrorHandler("Invalid activation token", 400));
+      // Validate required fields
+      if (!name || !email || !password || !avatar || !address || !phoneNumber || !zipCode) {
+        return next(new ErrorHandler("Please provide all required fields", 400));
       }
 
       // Check if user with the same email already exists
@@ -45,22 +34,22 @@ router.post(
       }
 
       // Upload avatar to Cloudinary
-      const myCloud = await cloudinary.uploader.upload(req.body.avatar, {
+      const myCloud = await cloudinary.uploader.upload(avatar, {
         folder: "avatars",
       });
 
       // Create seller object
       const seller = new Shop({
-        name: req.body.name,
-        email: email,
-        password: req.body.password,
+        name,
+        email,
+        password,
         avatar: {
           public_id: myCloud.public_id,
           url: myCloud.secure_url,
         },
-        address: req.body.address,
-        phoneNumber: req.body.phoneNumber,
-        zipCode: req.body.zipCode,
+        address,
+        phoneNumber,
+        zipCode,
       });
 
       // Save seller to database
@@ -90,9 +79,6 @@ router.post(
         message: `Please check your email: ${seller.email} to activate your shop!`,
       });
     } catch (error) {
-      if (error.name === "JsonWebTokenError") {
-        return next(new ErrorHandler("Invalid token", 400));
-      }
       return next(new ErrorHandler(error.message, 500));
     }
   })
@@ -101,7 +87,7 @@ router.post(
 // Create activation token
 const createActivationToken = (payload) => {
   return jwt.sign(payload, process.env.ACTIVATION_SECRET, {
-    expiresIn: "10m", // Token expires in 10 minutes
+    expiresIn: "1h", // Token expires in 1 hour
   });
 };
 
@@ -342,105 +328,6 @@ router.put(
       seller.address = address;
       seller.phoneNumber = phoneNumber;
       seller.zipCode = zipCode;
-
-      // Save updated seller in database
-      await seller.save();
-
-      // Respond to client
-      res.status(200).json({
-        success: true,
-        seller,
-      });
-    } catch (error) {
-      return next(new ErrorHandler(error.message, 500));
-    }
-  })
-);
-
-// Get all sellers (for admin)
-router.get(
-  "/admin-all-sellers",
-  isAuthenticated,
-  isAdmin("Admin"),
-  catchAsyncErrors(async (req, res, next) => {
-    try {
-      // Find all sellers sorted by creation date
-      const sellers = await Shop.find().sort({ createdAt: -1 });
-
-      // Respond to client
-      res.status(200).json({
-        success: true,
-        sellers,
-      });
-    } catch (error) {
-      return next(new ErrorHandler(error.message, 500));
-    }
-  })
-);
-
-// Delete seller by ID (admin)
-router.delete(
-  "/delete-seller/:id",
-  isAuthenticated,
-  isAdmin("Admin"),
-  catchAsyncErrors(async (req, res, next) => {
-    try {
-      // Find seller by ID and delete
-      await Shop.findByIdAndDelete(req.params.id);
-
-      // Respond to client
-      res.status(200).json({
-        success: true,
-        message: "Seller deleted successfully",
-      });
-    } catch (error) {
-      return next(new ErrorHandler(error.message, 500));
-    }
-  })
-);
-
-// Update seller withdraw methods
-router.put(
-  "/update-payment-methods",
-  isSeller,
-  catchAsyncErrors(async (req, res, next) => {
-    try {
-      const { withdrawMethod } = req.body;
-
-      // Find seller by ID and update withdraw method
-      const seller = await Shop.findByIdAndUpdate(
-        req.seller._id,
-        { withdrawMethod },
-        { new: true, runValidators: true }
-      );
-
-      // Respond to client
-      res.status(200).json({
-        success: true,
-        seller,
-      });
-    } catch (error) {
-      return next(new ErrorHandler(error.message, 500));
-    }
-  })
-);
-
-// Delete seller withdraw method
-router.delete(
-  "/delete-withdraw-method/",
-  isSeller,
-  catchAsyncErrors(async (req, res, next) => {
-    try {
-      // Find seller by ID
-      const seller = await Shop.findById(req.seller._id);
-
-      // If seller doesn't exist
-      if (!seller) {
-        return next(new ErrorHandler("Seller not found", 404));
-      }
-
-      // Remove withdraw method from seller
-      seller.withdrawMethod = null;
 
       // Save updated seller in database
       await seller.save();
