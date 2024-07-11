@@ -173,11 +173,6 @@ router.post(
         return next(new ErrorHandler("Please provide the correct information", 400));
       }
 
-      // If seller is not activated
-      if (!seller.isActivated) {
-        return next(new ErrorHandler("Account is not activated", 400));
-      }
-
       // Send token to client
       sendShopToken(seller, 200, res); // Implement sendShopToken function
     } catch (error) {
