@@ -53,7 +53,7 @@ router.post("/create-user", async (req, res, next) => {
 
     const activationToken = createToken(user);
 
-    const activationUrl = `http://localhost:3000/activation/${activationToken}`;
+    const activationUrl = `https://guriraline.com/activation/${activationToken}`;
 
     try {
       await sendMail({
@@ -232,18 +232,40 @@ router.put(
     try {
       const existsUser = await User.findById(req.user.id);
 
+      if (!existsUser) {
+        return next(new ErrorHandler("User not found", 404));
+      }
+
       if (req.body.avatar !== "") {
+        // Delete old avatar from Cloudinary
         const imageId = existsUser.avatar.public_id;
         await cloudinary.v2.uploader.destroy(imageId);
 
-        const myCloud = await cloudinary.v2.uploader.upload(req.body.avatar, {
-          folder: "avatars",
-          width: 150,
+        // Compress the new avatar image using sharp
+        const imageBuffer = Buffer.from(req.body.avatar, "base64");
+        const compressedImageBuffer = await sharp(imageBuffer)
+          .resize({ width: 150 }) // Adjust size as needed
+          .jpeg({ quality: 80 }) // Adjust quality as needed
+          .toBuffer();
+
+        // Convert the buffer to a stream
+        const stream = streamifier.createReadStream(compressedImageBuffer);
+
+        // Upload compressed image to Cloudinary
+        const result = await new Promise((resolve, reject) => {
+          cloudinary.v2.uploader.upload_stream(
+            { folder: "avatars" },
+            (error, result) => {
+              if (error) return reject(error);
+              resolve(result);
+            }
+          ).end(compressedImageBuffer);
         });
 
+        // Update user avatar
         existsUser.avatar = {
-          public_id: myCloud.public_id,
-          url: myCloud.secure_url,
+          public_id: result.public_id,
+          url: result.secure_url,
         };
       }
 
@@ -252,103 +274,6 @@ router.put(
       res.status(200).json({
         success: true,
         user: existsUser,
-      });
-    } catch (error) {
-      return next(new ErrorHandler(error.message, 500));
-    }
-  })
-);
-
-// Update user addresses
-router.put(
-  "/update-user-addresses",
-  isAuthenticated,
-  catchAsyncErrors(async (req, res, next) => {
-    try {
-      const user = await User.findById(req.user.id);
-
-      const sameTypeAddress = user.addresses.find(
-        (address) => address.addressType === req.body.addressType
-      );
-      if (sameTypeAddress) {
-        return next(
-          new ErrorHandler(`${req.body.addressType} address already exists`)
-        );
-      }
-
-      const existsAddress = user.addresses.find(
-        (address) => address._id === req.body._id
-      );
-
-      if (existsAddress) {
-        Object.assign(existsAddress, req.body);
-      } else {
-        user.addresses.push(req.body);
-      }
-
-      await user.save();
-
-      res.status(200).json({
-        success: true,
-        user,
-      });
-    } catch (error) {
-      return next(new ErrorHandler(error.message, 500));
-    }
-  })
-);
-
-// Delete user address
-router.delete(
-  "/delete-user-address/:id",
-  isAuthenticated,
-  catchAsyncErrors(async (req, res, next) => {
-    try {
-      const userId = req.user._id;
-      const addressId = req.params.id;
-
-      await User.updateOne(
-        { _id: userId },
-        { $pull: { addresses: { _id: addressId } } }
-      );
-
-      const user = await User.findById(userId);
-
-      res.status(200).json({ success: true, user });
-    } catch (error) {
-      return next(new ErrorHandler(error.message, 500));
-    }
-  })
-);
-
-// Update user password
-router.put(
-  "/update-user-password",
-  isAuthenticated,
-  catchAsyncErrors(async (req, res, next) => {
-    try {
-      const user = await User.findById(req.user.id).select("+password");
-
-      const isPasswordMatched = await user.comparePassword(
-        req.body.oldPassword
-      );
-
-      if (!isPasswordMatched) {
-        return next(new ErrorHandler("Old password is incorrect!", 400));
-      }
-
-      if (req.body.newPassword !== req.body.confirmPassword) {
-        return next(
-          new ErrorHandler("Passwords do not match!", 400)
-        );
-      }
-
-      user.password = req.body.newPassword;
-      await user.save();
-
-      res.status(200).json({
-        success: true,
-        message: "Password updated successfully!",
       });
     } catch (error) {
       return next(new ErrorHandler(error.message, 500));
