@@ -23,6 +23,14 @@ const productSchema = new mongoose.Schema({
     type: Number,
     required: [true, "Please enter your product price!"],
   },
+  featured: {
+    type: Boolean,
+    default: false,
+  },
+  bestdeal: {
+    type: Boolean,
+    default: false,
+  },
   stock: {
     type: Number,
     required: [true, "Please enter your product stock!"],
